@@ -28,8 +28,8 @@ function updateMatchResults($conn, $matchId, $player1Scores, $player2Scores) {
 
     $winnerId = $player1Wins > $player2Wins ? $_POST['player1_id'] : $_POST['player2_id'];
 
-    $query = 'UPDATE matches SET player1_set1 = ?, player1_set2 = ?, player1_set3 = ?, 
-                                player2_set1 = ?, player2_set2 = ?, player2_set3 = ?, 
+    $query = 'UPDATE matches SET player1_score1 = ?, player1_score2 = ?, player1_score3 = ?, 
+                                player2_score1 = ?, player2_score2 = ?, player2_score3 = ?, 
                                 winner_id = ? 
               WHERE match_id = ?';
     $stmt = $conn->prepare($query);
@@ -86,7 +86,7 @@ function assignPlayersToPools($conn) {
 
     foreach ([$poolA, $poolB] as $index => $pool) {
         $poolName = $pools[$index];
-        for ($i = 0; i < count($pool); $i += 2) {
+        for ($i = 0; $i < count($pool); $i += 2) {
             if (isset($pool[$i + 1])) {
                 $query = 'INSERT INTO matches (round, pool, player1_id, player2_id) VALUES (?, ?, ?, ?)';
                 $stmt = $conn->prepare($query);
