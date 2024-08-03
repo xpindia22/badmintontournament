@@ -1,4 +1,7 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 require_once 'config.php';
 
 function getMatches($conn) {
@@ -14,7 +17,22 @@ function getMatches($conn) {
     return $result->fetch_all(MYSQLI_ASSOC);
 }
 
-function updateMatchResults($conn, $matchId, $player1Scores, $player2Scores) {
+function getFixtures($conn) {
+    $query = 'SELECT m.match_id, m.round, m.pool, p1.player_name AS player1, p2.player_name AS player2, 
+              m.player1_score1, m.player1_score2, m.player1_score3, m.player2_score1, m.player2_score2, m.player2_score3, 
+              m.winner_id, m.match_date, m.player1_id, m.player2_id
+              FROM matches m 
+              LEFT JOIN players p1 ON m.player1_id = p1.player_id 
+              LEFT JOIN players p2 ON m.player2_id = p2.player_id 
+              ORDER BY FIELD(m.round, "Pre-Quarter-finals", "Quarter-finals", "Semi-finals", "Finals"), m.match_date';
+    $result = $conn->query($query);
+    if (!$result) {
+        die('Query failed: ' . $conn->error);
+    }
+    return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+function updateMatchResults($conn, $matchId, $player1Scores, $player2Scores, $player1Id, $player2Id) {
     $player1Wins = 0;
     $player2Wins = 0;
 
@@ -26,7 +44,7 @@ function updateMatchResults($conn, $matchId, $player1Scores, $player2Scores) {
         }
     }
 
-    $winnerId = $player1Wins > $player2Wins ? $_POST['player1_id'] : $_POST['player2_id'];
+    $winnerId = $player1Wins > $player2Wins ? $player1Id : $player2Id;
 
     $query = 'UPDATE matches SET player1_score1 = ?, player1_score2 = ?, player1_score3 = ?, 
                                 player2_score1 = ?, player2_score2 = ?, player2_score3 = ?, 
@@ -37,6 +55,33 @@ function updateMatchResults($conn, $matchId, $player1Scores, $player2Scores) {
                                    $player2Scores[0], $player2Scores[1], $player2Scores[2], 
                                    $winnerId, $matchId);
     $stmt->execute();
+
+    // Check if all matches in the current round are completed
+    $query = 'SELECT round, pool FROM matches WHERE match_id = ?';
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param('i', $matchId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $match = $result->fetch_assoc();
+
+    $currentRound = $match['round'];
+    $pool = $match['pool'];
+
+    $query = 'SELECT COUNT(*) as count FROM matches WHERE round = ? AND pool = ? AND winner_id IS NULL';
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param('ss', $currentRound, $pool);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $count = $result->fetch_assoc()['count'];
+
+    // If all matches are completed, create fixtures for the next round
+    if ($count == 0) {
+        $rounds = ['Pre-Quarter-finals' => 'Quarter-finals', 'Quarter-finals' => 'Semi-finals', 'Semi-finals' => 'Finals'];
+        if (array_key_exists($currentRound, $rounds)) {
+            $nextRound = $rounds[$currentRound];
+            createNextRoundFixtures($conn, $currentRound, $nextRound);
+        }
+    }
 }
 
 function createNextRoundFixtures($conn, $currentRound, $nextRound) {
