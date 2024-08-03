@@ -5,15 +5,47 @@ ini_set('display_errors', 1);
 require_once 'config.php';
 require_once 'functions.php';
 
-$fixtures = getFixtures($conn);
+$conn = new mysqli($host, $user, $pwd, $db);
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !fixturesCreated($conn)) {
-    assignPlayersToPools($conn);
-    $rounds = ['Pre-Quarter-finals', 'Quarter-finals', 'Semi-finals', 'Finals'];
-    foreach ($rounds as $currentRound => $nextRound) {
-        createNextRoundFixtures($conn, $currentRound, $nextRound);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!fixturesCreated($conn)) {
+        assignPlayersToPools($conn);
+        $rounds = [
+            'Pre-Quarter-finals' => 'Quarter-finals', 
+            'Quarter-finals' => 'Semi-finals', 
+            'Semi-finals' => 'Finals'
+        ];
+        foreach ($rounds as $currentRound => $nextRound) {
+            createNextRoundFixtures($conn, $currentRound, $nextRound);
+        }
+    } else {
+        // Handle updating match results
+        $matchId = $_POST['match_id'];
+        $player1Scores = [$_POST['player1_score1'], $_POST['player1_score2'], $_POST['player1_score3']];
+        $player2Scores = [$_POST['player2_score1'], $_POST['player2_score2'], $_POST['player2_score3']];
+        $player1Id = $_POST['player1_id'];
+        $player2Id = $_POST['player2_id'];
+        
+        updateMatchResults($conn, $matchId, $player1Scores, $player2Scores, $player1Id, $player2Id);
+        
+        // Update fixtures after the match results
+        $rounds = [
+            'Pre-Quarter-finals' => 'Quarter-finals', 
+            'Quarter-finals' => 'Semi-finals', 
+            'Semi-finals' => 'Finals'
+        ];
+        foreach ($rounds as $currentRound => $nextRound) {
+            createNextRoundFixtures($conn, $currentRound, $nextRound);
+        }
     }
 }
+
+$fixtures = getFixtures($conn);
+
+$conn->close();
 ?>
 
 <!DOCTYPE html>

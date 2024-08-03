@@ -164,12 +164,9 @@ function fixturesCreated($conn) {
     }
     return false;
 }
-?>
-<?php
-require_once 'config.php';
 
 function getQuarterFinalWinners($conn) {
-    $sql = "SELECT winner_id FROM fixtures WHERE round = 'quarter_final'";
+    $sql = "SELECT winner_id FROM matches WHERE round = 'Quarter-finals'";
     $result = $conn->query($sql);
 
     $winners = [];
@@ -199,7 +196,7 @@ function createSemiFinalFixtures($conn) {
 
     // Insert the semi-final fixtures into the database
     foreach ($fixtures as $fixture) {
-        $sql = "INSERT INTO fixtures (player1_id, player2_id, round) VALUES (?, ?, 'semi_final')";
+        $sql = "INSERT INTO matches (player1_id, player2_id, round) VALUES (?, ?, 'Semi-finals')";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("ii", $fixture['player1'], $fixture['player2']);
         $stmt->execute();
