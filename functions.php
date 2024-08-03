@@ -57,7 +57,9 @@ function updateMatchResults($conn, $matchId, $player1Scores, $player2Scores, $pl
     $stmt->bind_param('iiiiiiii', $player1Scores[0], $player1Scores[1], $player1Scores[2], 
                                    $player2Scores[0], $player2Scores[1], $player2Scores[2], 
                                    $winnerId, $matchId);
-    $stmt->execute();
+    if (!$stmt->execute()) {
+        die('Update match results failed: ' . $stmt->error);
+    }
 
     // Check if all matches in the current round are completed
     $query = 'SELECT round, pool FROM matches WHERE match_id = ?';
@@ -105,12 +107,24 @@ function createNextRoundFixtures($conn, $currentRound, $nextRound) {
     }
 
     foreach ($winnersByPool as $pool => $winners) {
-        for ($i = 0; $i < count($winners); $i += 2) {
-            if (isset($winners[$i + 1])) {
+        // Ensure we have an even number of winners and only 2 for the finals
+        if ($nextRound == 'Finals') {
+            $totalWinners = min(2, count($winners));
+        } else {
+            $totalWinners = count($winners);
+        }
+        if ($totalWinners % 2 !== 0) {
+            $winners[] = null; // Add a placeholder if the number of winners is odd
+        }
+
+        for ($i = 0; $i < $totalWinners; $i += 2) {
+            if (isset($winners[$i]) && isset($winners[$i + 1])) {
                 $query = 'INSERT INTO matches (round, pool, player1_id, player2_id) VALUES (?, ?, ?, ?)';
                 $stmt = $conn->prepare($query);
                 $stmt->bind_param('ssii', $nextRound, $pool, $winners[$i], $winners[$i + 1]);
-                $stmt->execute();
+                if (!$stmt->execute()) {
+                    die('Create next round fixtures failed: ' . $stmt->error);
+                }
             }
         }
     }
@@ -143,14 +157,18 @@ function assignPlayersToPools($conn) {
                 $query = 'INSERT INTO matches (round, pool, player1_id, player2_id) VALUES (?, ?, ?, ?)';
                 $stmt = $conn->prepare($query);
                 $stmt->bind_param('ssii', $round, $poolName, $pool[$i], $pool[$i + 1]);
-                $stmt->execute();
+                if (!$stmt->execute()) {
+                    die('Assign players to pools failed: ' . $stmt->error);
+                }
             }
         }
     }
 
     // Update the settings table to indicate fixtures have been created
     $query = 'UPDATE settings SET value = "yes" WHERE key_name = "fixtures_created"';
-    $conn->query($query);
+    if (!$conn->query($query)) {
+        die('Update settings failed: ' . $conn->error);
+    }
 
     echo "Players assigned to pools and fixtures created successfully!";
 }
@@ -199,7 +217,9 @@ function createSemiFinalFixtures($conn) {
         $sql = "INSERT INTO matches (player1_id, player2_id, round) VALUES (?, ?, 'Semi-finals')";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("ii", $fixture['player1'], $fixture['player2']);
-        $stmt->execute();
+        if (!$stmt->execute()) {
+            die('Create semi-final fixtures failed: ' . $stmt->error);
+        }
     }
 
     echo "Semi-final fixtures created successfully.";
