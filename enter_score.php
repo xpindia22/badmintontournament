@@ -29,9 +29,12 @@ $matches = getMatches($conn);
 <form method="POST" action="enter_score.php">
 <select name="match_id" required>
     <?php if (count($matches) > 0): ?>
-        <?php foreach ($matches as $match): ?>
+        <?php foreach ($matches as $match): 
+            $player1 = htmlspecialchars($match['player1'] ?? 'Unknown Player');
+            $player2 = htmlspecialchars($match['player2'] ?? 'Unknown Player');
+        ?>
             <option value="<?php echo htmlspecialchars($match['match_id']); ?>" data-player1-id="<?php echo htmlspecialchars($match['player1_id']); ?>" data-player2-id="<?php echo htmlspecialchars($match['player2_id']); ?>">
-                <?php echo htmlspecialchars($match['player1']) . ' vs. ' . htmlspecialchars($match['player2']); ?>
+                <?php echo $player1 . ' vs. ' . $player2; ?>
             </option>
         <?php endforeach; ?>
     <?php else: ?>

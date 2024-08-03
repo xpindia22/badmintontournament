@@ -18,8 +18,11 @@ function getMatches($conn) {
 }
 
 function getFixtures($conn) {
-    $query = 'SELECT m.match_id, m.round, m.pool, p1.player_name AS player1, p2.player_name AS player2, 
-              m.player1_score1, m.player1_score2, m.player1_score3, m.player2_score1, m.player2_score2, m.player2_score3, 
+    $query = 'SELECT m.match_id, m.round, m.pool, 
+              COALESCE(p1.player_name, "Unknown Player") AS player1, 
+              COALESCE(p2.player_name, "Unknown Player") AS player2, 
+              m.player1_score1, m.player1_score2, m.player1_score3, 
+              m.player2_score1, m.player2_score2, m.player2_score3, 
               m.winner_id, m.match_date, m.player1_id, m.player2_id
               FROM matches m 
               LEFT JOIN players p1 ON m.player1_id = p1.player_id 
@@ -76,7 +79,11 @@ function updateMatchResults($conn, $matchId, $player1Scores, $player2Scores, $pl
 
     // If all matches are completed, create fixtures for the next round
     if ($count == 0) {
-        $rounds = ['Pre-Quarter-finals' => 'Quarter-finals', 'Quarter-finals' => 'Semi-finals', 'Semi-finals' => 'Finals'];
+        $rounds = [
+            'Pre-Quarter-finals' => 'Quarter-finals', 
+            'Quarter-finals' => 'Semi-finals', 
+            'Semi-finals' => 'Finals'
+        ];
         if (array_key_exists($currentRound, $rounds)) {
             $nextRound = $rounds[$currentRound];
             createNextRoundFixtures($conn, $currentRound, $nextRound);
@@ -156,5 +163,48 @@ function fixturesCreated($conn) {
         return $row['value'] === 'yes';
     }
     return false;
+}
+?>
+<?php
+require_once 'config.php';
+
+function getQuarterFinalWinners($conn) {
+    $sql = "SELECT winner_id FROM fixtures WHERE round = 'quarter_final'";
+    $result = $conn->query($sql);
+
+    $winners = [];
+    if ($result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            if (!is_null($row['winner_id'])) {
+                $winners[] = $row['winner_id'];
+            }
+        }
+    }
+    return $winners;
+}
+
+function createSemiFinalFixtures($conn) {
+    // Get the quarter-final winners
+    $winners = getQuarterFinalWinners($conn);
+
+    if (count($winners) < 4) {
+        echo "Not enough players to create semi-final fixtures. Players found: " . count($winners);
+        return;
+    }
+
+    // Create fixtures for the semi-finals
+    $fixtures = [];
+    $fixtures[] = ['player1' => $winners[0], 'player2' => $winners[1]];
+    $fixtures[] = ['player1' => $winners[2], 'player2' => $winners[3]];
+
+    // Insert the semi-final fixtures into the database
+    foreach ($fixtures as $fixture) {
+        $sql = "INSERT INTO fixtures (player1_id, player2_id, round) VALUES (?, ?, 'semi_final')";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("ii", $fixture['player1'], $fixture['player2']);
+        $stmt->execute();
+    }
+
+    echo "Semi-final fixtures created successfully.";
 }
 ?>

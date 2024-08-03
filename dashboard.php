@@ -9,7 +9,7 @@ $fixtures = getFixtures($conn);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !fixturesCreated($conn)) {
     assignPlayersToPools($conn);
-    $rounds = ['Pre-Quarter-finals' => 'Quarter-finals', 'Quarter-finals' => 'Semi-finals', 'Semi-finals' => 'Finals'];
+    $rounds = ['Pre-Quarter-finals', 'Quarter-finals', 'Semi-finals', 'Finals'];
     foreach ($rounds as $currentRound => $nextRound) {
         createNextRoundFixtures($conn, $currentRound, $nextRound);
     }
@@ -68,23 +68,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !fixturesCreated($conn)) {
 
     <div class="bracket">
         <?php 
-        $rounds = ["Pre-Quarter-finals", "Quarter-finals", "Semi-finals", "Finals"];
+        $rounds = ['Pre-Quarter-finals', 'Quarter-finals', 'Semi-finals', 'Finals'];
         foreach ($rounds as $round) : ?>
             <div class="round">
                 <h2><?php echo $round; ?></h2>
                 <?php foreach ($fixtures as $fixture) : 
                     if ($fixture['round'] == $round) :
-                        $player1 = htmlspecialchars($fixture['player1'] ?? '');
-                        $player2 = htmlspecialchars($fixture['player2'] ?? '');
+                        $player1 = htmlspecialchars($fixture['player1'] ?? 'Unknown Player');
+                        $player2 = htmlspecialchars($fixture['player2'] ?? 'Unknown Player');
                         $player1_class = ($fixture['winner_id'] == $fixture['player1_id']) ? 'winner' : 'loser';
                         $player2_class = ($fixture['winner_id'] == $fixture['player2_id']) ? 'winner' : 'loser';
                 ?>
                     <div class="match">
                         <div class="player <?php echo $player1_class; ?>">
-                            <?php echo $player1 ?: 'No player'; ?>
+                            <?php echo $player1; ?>
                         </div>
                         <div class="player <?php echo $player2_class; ?>">
-                            <?php echo $player2 ?: 'No player'; ?>
+                            <?php echo $player2; ?>
                         </div>
                     </div>
                 <?php endif; endforeach; ?>
