@@ -14,7 +14,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!fixturesCreated($conn)) {
         assignPlayersToPools($conn);
         $rounds = [
-            'Pre-Quarter-finals' => 'Quarter-finals', 
+            'Round of 32' => 'Round of 16',
+            'Round of 16' => 'Quarter-finals', 
             'Quarter-finals' => 'Semi-finals', 
             'Semi-finals' => 'Finals'
         ];
@@ -33,7 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Update fixtures after the match results
         $rounds = [
-            'Pre-Quarter-finals' => 'Quarter-finals', 
+            'Round of 32' => 'Round of 16',
+            'Round of 16' => 'Quarter-finals', 
             'Quarter-finals' => 'Semi-finals', 
             'Semi-finals' => 'Finals'
         ];
@@ -58,7 +60,7 @@ $conn->close();
         .bracket {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             margin: 20px;
         }
         .round {
@@ -100,16 +102,30 @@ $conn->close();
 
     <div class="bracket">
         <?php 
-        $rounds = ['Pre-Quarter-finals', 'Quarter-finals', 'Semi-finals', 'Finals'];
-        foreach ($rounds as $round) : ?>
+        $rounds = ['Round of 32', 'Round of 16', 'Quarter-finals', 'Semi-finals', 'Finals'];
+        $numPlayers = [32, 16, 8, 4, 2];
+
+        foreach ($rounds as $index => $round) : ?>
             <div class="round">
                 <h2><?php echo $round; ?></h2>
-                <?php foreach ($fixtures as $fixture) : 
-                    if ($fixture['round'] == $round) :
+                <?php 
+                for ($i = 0; $i < $numPlayers[$index] / 2; $i++) :
+                    $fixture = array_filter($fixtures, function ($fixture) use ($round, $i) {
+                        return $fixture['round'] == $round && $fixture['match_id'] == $i + 1;
+                    });
+                    $fixture = reset($fixture);
+
+                    if ($fixture) {
                         $player1 = htmlspecialchars($fixture['player1'] ?? 'Unknown Player');
                         $player2 = htmlspecialchars($fixture['player2'] ?? 'Unknown Player');
                         $player1_class = ($fixture['winner_id'] == $fixture['player1_id']) ? 'winner' : 'loser';
                         $player2_class = ($fixture['winner_id'] == $fixture['player2_id']) ? 'winner' : 'loser';
+                    } else {
+                        $player1 = 'Unknown Player';
+                        $player2 = 'Unknown Player';
+                        $player1_class = 'loser';
+                        $player2_class = 'loser';
+                    }
                 ?>
                     <div class="match">
                         <div class="player <?php echo $player1_class; ?>">
@@ -119,7 +135,7 @@ $conn->close();
                             <?php echo $player2; ?>
                         </div>
                     </div>
-                <?php endif; endforeach; ?>
+                <?php endfor; ?>
             </div>
         <?php endforeach; ?>
     </div>
