@@ -17,18 +17,28 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['new_player_name'], $_P
         $stmt->execute();
         $player_id = $stmt->insert_id;
 
-        $sql = "INSERT INTO tournament_players (tournament_id, player_id, pool) VALUES (?, ?, 'A')";
+        // Validate tournament sex criteria
+        $sql = "SELECT sex_criteria FROM tournaments WHERE tournament_id = ?";
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ii", $tournament_id, $player_id);
+        $stmt->bind_param("i", $tournament_id);
         $stmt->execute();
+        $result = $stmt->get_result();
+        $tournament = $result->fetch_assoc();
 
-        $conn->commit();
-        echo "Player added and assigned to tournament successfully!";
-        header("Location: add_player.php");
+        if ($tournament['sex_criteria'] === $sex || $tournament['sex_criteria'] === 'Mixed') {
+            $sql = "INSERT INTO tournament_players (tournament_id, player_id, pool) VALUES (?, ?, 'A')";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ii", $tournament_id, $player_id);
+            $stmt->execute();
+            $conn->commit();
+            echo "<script>alert('Player added and assigned to tournament successfully!'); window.location.href = 'add_player.php';</script>";
+        } else {
+            throw new Exception("Player's sex does not match the tournament's criteria");
+        }
         exit();
     } catch (Exception $e) {
         $conn->rollback();
-        echo "Failed to add player: " . $e->getMessage();
+        echo "<script>alert('Failed to add player: " . $e->getMessage() . "'); window.location.href = 'add_player.php';</script>";
     }
 }
 
@@ -44,8 +54,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_player_id'])) {
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("ssisi", $player_name, $dob, $age, $sex, $player_id);
     $stmt->execute();
-    echo "Player updated successfully!";
-    header("Location: add_player.php");
+    echo "<script>alert('Player updated successfully!'); window.location.href = 'add_player.php';</script>";
     exit();
 }
 
@@ -54,23 +63,88 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['player_id'], $_POST['t
     $player_id = $_POST['player_id'];
     $tournament_id = $_POST['tournament_id'];
 
-    $sql = "SELECT * FROM tournament_players WHERE player_id = ? AND tournament_id = ?";
+    // Validate player's age for the tournament
+    $sql = "SELECT age_criteria, sex_criteria FROM tournaments WHERE tournament_id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ii", $player_id, $tournament_id);
+    $stmt->bind_param("i", $tournament_id);
     $stmt->execute();
     $result = $stmt->get_result();
+    $tournament = $result->fetch_assoc();
+    $age_criteria = $tournament['age_criteria'];
+    $sex_criteria = $tournament['sex_criteria'];
 
-    if ($result->num_rows === 0) {
-        $sql = "INSERT INTO tournament_players (tournament_id, player_id, pool) VALUES (?, ?, 'A')";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ii", $tournament_id, $player_id);
-        $stmt->execute();
-        echo "Player assigned to tournament successfully!";
-    } else {
-        echo "Player is already assigned to this tournament!";
+    $sql = "SELECT age, sex FROM players WHERE player_id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $player_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $player = $result->fetch_assoc();
+    $player_age = $player['age'];
+    $player_sex = $player['sex'];
+
+    $allowed = false;
+    if ($sex_criteria === $player_sex || $sex_criteria === 'Mixed') {
+        if ($age_criteria === 'Open') {
+            $allowed = true; // Allow any age for "Open" category
+        } else {
+            switch ($age_criteria) {
+                case 'Under 11':
+                    if ($player_age < 11) $allowed = true;
+                    break;
+                case 'Under 15':
+                    if ($player_age < 15) $allowed = true;
+                    break;
+                case 'Under 17':
+                    if ($player_age < 17) $allowed = true;
+                    break;
+                case 'Under 19':
+                    if ($player_age < 19) $allowed = true;
+                    break;
+                case 'Senior 40Plus':
+                    if ($player_age >= 40) $allowed = true;
+                    break;
+                case 'Senior 45Plus':
+                    if ($player_age >= 45) $allowed = true;
+                    break;
+                case 'Senior 50Plus':
+                    if ($player_age >= 50) $allowed = true;
+                    break;
+                case 'Senior 55Plus':
+                    if ($player_age >= 55) $allowed = true;
+                    break;
+                case 'Senior 60Plus':
+                    if ($player_age >= 60) $allowed = true;
+                    break;
+                case 'Senior 65Plus':
+                    if ($player_age >= 65) $allowed = true;
+                    break;
+                case 'Senior 70Plus':
+                    if ($player_age >= 70) $allowed = true;
+                    break;
+            }
+        }
     }
 
-    header("Location: add_player.php");
+    if ($allowed) {
+        $sql = "SELECT * FROM tournament_players WHERE player_id = ? AND tournament_id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("ii", $player_id, $tournament_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($result->num_rows === 0) {
+            $sql = "INSERT INTO tournament_players (tournament_id, player_id, pool) VALUES (?, ?, 'A')";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ii", $tournament_id, $player_id);
+            $stmt->execute();
+            echo "<script>alert('Player assigned to tournament successfully!'); window.location.href = 'add_player.php';</script>";
+        } else {
+            echo "<script>alert('Player is already assigned to this tournament!'); window.location.href = 'add_player.php';</script>";
+        }
+    } else {
+        echo "<script>alert('Player does not meet the age or sex criteria for this tournament!'); window.location.href = 'add_player.php';</script>";
+    }
+
     exit();
 }
 
@@ -97,14 +171,15 @@ if (isset($_GET['delete_assignment'])) {
 }
 
 // Handle tournament creation
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['tournament_name'])) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['tournament_name'], $_POST['age_criteria'], $_POST['sex_criteria'])) {
     $tournament_name = $_POST['tournament_name'];
-    $sql = "INSERT INTO tournaments (tournament_name) VALUES (?)";
+    $age_criteria = $_POST['age_criteria'];
+    $sex_criteria = $_POST['sex_criteria'];
+    $sql = "INSERT INTO tournaments (tournament_name, age_criteria, sex_criteria) VALUES (?, ?, ?)";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $tournament_name);
+    $stmt->bind_param("sss", $tournament_name, $age_criteria, $sex_criteria);
     $stmt->execute();
-    echo "Tournament created successfully!";
-    header("Location: add_player.php");
+    echo "<script>alert('Tournament created successfully!'); window.location.href = 'add_player.php';</script>";
     exit();
 }
 
@@ -285,7 +360,7 @@ if ($result->num_rows > 0) {
             <select id="tournament_id" name="tournament_id" required>
                 <option value="">Select Tournament</option>
                 <?php foreach ($tournaments as $tournament): ?>
-                    <option value="<?= $tournament['tournament_id'] ?>"><?= $tournament['tournament_name'] ?></option>
+                    <option value="<?= $tournament['tournament_id'] ?>"><?= $tournament['tournament_name'] ?> (<?= $tournament['age_criteria'] ?>)</option>
                 <?php endforeach; ?>
             </select>
             <button type="submit">Assign Player to Tournament</button>
@@ -295,6 +370,27 @@ if ($result->num_rows > 0) {
         <form method="POST" action="add_player.php">
             <label for="tournament_name">Tournament Name:</label>
             <input type="text" id="tournament_name" name="tournament_name" required>
+            <label for="age_criteria">Age Criteria:</label>
+            <select id="age_criteria" name="age_criteria" required>
+                <option value="Under 11">Under 11</option>
+                <option value="Under 15">Under 15</option>
+                <option value="Under 17">Under 17</option>
+                <option value="Under 19">Under 19</option>
+                <option value="Open">Open</option>
+                <option value="Senior 40Plus">Senior 40Plus</option>
+                <option value="Senior 45Plus">Senior 45Plus</option>
+                <option value="Senior 50Plus">Senior 50Plus</option>
+                <option value="Senior 55Plus">Senior 55Plus</option>
+                <option value="Senior 60Plus">Senior 60Plus</option>
+                <option value="Senior 65Plus">Senior 65Plus</option>
+                <option value="Senior 70Plus">Senior 70Plus</option>
+            </select>
+            <label for="sex_criteria">Sex Criteria:</label>
+            <select id="sex_criteria" name="sex_criteria" required>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Mixed">Mixed</option>
+            </select>
             <button type="submit">Create Tournament</button>
         </form>
 
@@ -345,7 +441,7 @@ if ($result->num_rows > 0) {
                 <tr>
                     <td><?php echo htmlspecialchars($assignment['player_id']); ?></td>
                     <td><?php echo htmlspecialchars($assignment['player_name']); ?></td>
-                    <td contenteditable="true"><?php echo htmlspecialchars($assignment['tournaments']); ?></td>
+                    <td><?php echo htmlspecialchars($assignment['tournaments']); ?></td>
                     <td class="action-buttons">
                         <a href="edit_assignment.php?player_id=<?php echo $assignment['player_id']; ?>">Edit</a>
                         <a href="add_player.php?delete_assignment=<?php echo $assignment['player_id']; ?>" onclick="return confirm('Are you sure you want to delete this assignment?');">Delete</a>
