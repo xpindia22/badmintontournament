@@ -1,13 +1,30 @@
 <?php
 require_once 'config.php';
 
-// Handle adding a new player and assigning to tournament
+function normalizeSex($sex) {
+    $maleRepresentations = ['m', 'male', 'M', 'B', 'Boys', 'Men', 'men', 'boys'];
+    $femaleRepresentations = ['f', 'female', 'F', 'G', 'g', 'girls', 'Girls'];
+
+    if (in_array(strtolower($sex), array_map('strtolower', $maleRepresentations))) {
+        return 'Male';
+    }
+    if (in_array(strtolower($sex), array_map('strtolower', $femaleRepresentations))) {
+        return 'Female';
+    }
+    return null;
+}
+
+// Handle adding a new player.
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['new_player_name'], $_POST['new_player_dob'], $_POST['new_player_sex'])) {
     $player_name = $_POST['new_player_name'];
     $dob = $_POST['new_player_dob'];
-    $sex = $_POST['new_player_sex'];
-     
+    $sex = normalizeSex($_POST['new_player_sex']);
     $age = date_diff(date_create($dob), date_create('today'))->y;
+
+    if ($sex === null) {
+        echo "<script>alert('Invalid sex value!'); window.location.href = 'add_player.php';</script>";
+        exit();
+    }
 
     $conn->begin_transaction();
     try {
@@ -47,8 +64,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_player_id'])) {
     $player_id = $_POST['update_player_id'];
     $player_name = $_POST['update_player_name'];
     $dob = $_POST['update_player_dob'];
-    $sex = $_POST['update_player_sex'];
+    $sex = normalizeSex($_POST['update_player_sex']);
     $age = date_diff(date_create($dob), date_create('today'))->y;
+
+    if ($sex === null) {
+        echo "<script>alert('Invalid sex value!'); window.location.href = 'add_player.php';</script>";
+        exit();
+    }
 
     $sql = "UPDATE players SET player_name = ?, dob = ?, age = ?, sex = ? WHERE player_id = ?";
     $stmt = $conn->prepare($sql);
@@ -63,7 +85,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['player_id'], $_POST['t
     $player_id = $_POST['player_id'];
     $tournament_id = $_POST['tournament_id'];
 
-    // Validate player's age for the tournament
+    // Validate player's age and sex for the tournament
     $sql = "SELECT age_criteria, sex_criteria FROM tournaments WHERE tournament_id = ?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $tournament_id);
@@ -86,41 +108,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['player_id'], $_POST['t
     if ($sex_criteria === $player_sex || $sex_criteria === 'Mixed') {
         if ($age_criteria === 'Open') {
             $allowed = true; // Allow any age for "Open" category
-        } else {
-            switch ($age_criteria) {
-                case 'Under 11':
-                    if ($player_age < 11) $allowed = true;
-                    break;
-                case 'Under 15':
-                    if ($player_age < 15) $allowed = true;
-                    break;
-                case 'Under 17':
-                    if ($player_age < 17) $allowed = true;
-                    break;
-                case 'Under 19':
-                    if ($player_age < 19) $allowed = true;
-                    break;
-                case 'Senior 40Plus':
-                    if ($player_age >= 40) $allowed = true;
-                    break;
-                case 'Senior 45Plus':
-                    if ($player_age >= 45) $allowed = true;
-                    break;
-                case 'Senior 50Plus':
-                    if ($player_age >= 50) $allowed = true;
-                    break;
-                case 'Senior 55Plus':
-                    if ($player_age >= 55) $allowed = true;
-                    break;
-                case 'Senior 60Plus':
-                    if ($player_age >= 60) $allowed = true;
-                    break;
-                case 'Senior 65Plus':
-                    if ($player_age >= 65) $allowed = true;
-                    break;
-                case 'Senior 70Plus':
-                    if ($player_age >= 70) $allowed = true;
-                    break;
+        } else if (strpos($age_criteria, 'Under') === 0) {
+            $max_age = (int) filter_var($age_criteria, FILTER_SANITIZE_NUMBER_INT);
+            if ($player_age < $max_age) {
+                $allowed = true;
+            } else if ($player_age < 11 && $max_age >= 11) {
+                $allowed = true;
+            } else if ($player_age < 13 && $max_age >= 13) {
+                $allowed = true;
+            } else if ($player_age < 15 && $max_age >= 15) {
+                $allowed = true;
+            } else if ($player_age < 17 && $max_age >= 17) {
+                $allowed = true;
+            } else if ($player_age < 19 && $max_age >= 19) {
+                $allowed = true;
+            }
+        } else if (strpos($age_criteria, 'Senior') === 0) {
+            $min_age = (int) filter_var($age_criteria, FILTER_SANITIZE_NUMBER_INT);
+            if ($player_age >= $min_age) {
+                $allowed = true;
+            } else if ($player_age >= 40 && $min_age == 50) {
+                $allowed = true;
+            } else if ($player_age >= 50 && $min_age == 60) {
+                $allowed = true;
+            } else if ($player_age >= 60 && $min_age == 65) {
+                $allowed = true;
+            } else if ($player_age >= 65 && $min_age == 70) {
+                $allowed = true;
             }
         }
     }
@@ -163,7 +177,7 @@ if (isset($_GET['delete'])) {
 if (isset($_GET['delete_assignment'])) {
     $player_id = $_GET['delete_assignment'];
     $sql = "DELETE FROM tournament_players WHERE player_id = ?";
-    $stmt = $conn->prepare($sql);
+    $stmt->prepare($sql);
     $stmt->bind_param("i", $player_id);
     $stmt->execute();
     header("Location: add_player.php");
@@ -174,7 +188,7 @@ if (isset($_GET['delete_assignment'])) {
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['tournament_name'], $_POST['age_criteria'], $_POST['sex_criteria'])) {
     $tournament_name = $_POST['tournament_name'];
     $age_criteria = $_POST['age_criteria'];
-    $sex_criteria = $_POST['sex_criteria'];
+    $sex_criteria = normalizeSex($_POST['sex_criteria']);
     $sql = "INSERT INTO tournaments (tournament_name, age_criteria, sex_criteria) VALUES (?, ?, ?)";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("sss", $tournament_name, $age_criteria, $sex_criteria);
@@ -322,19 +336,19 @@ if ($result->num_rows > 0) {
 </head>
 <body>
     <header>
-        <h1>Add Player and Create Tournament</h1>
+        <h1>Manage Player's and Tournament's</h1>
     </header>
     <section>
-        <!-- Form to add new player and assign to tournament -->
+        <!-- Form to add new player -->
         <form method="POST" action="add_player.php" onsubmit="keepFocus()">
-            <label for="new_player_name">Player Name:</label>
+            <label for="new_player_name">Register New Player:</label>
             <input type="text" id="new_player_name" name="new_player_name" required>
             <label for="new_player_dob">Date of Birth:</label>
             <input type="date" id="new_player_dob" name="new_player_dob" required>
             <label for="new_player_sex">Sex:</label>
             <select id="new_player_sex" name="new_player_sex" required>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
+                <option value="M">Male</option>
+                <option value="F">Female</option>
                 <option value="Other">Other</option>
             </select>
             <!-- <label for="new_tournament_id">Select Tournament:</label>
@@ -344,7 +358,7 @@ if ($result->num_rows > 0) {
                     <option value="<?= $tournament['tournament_id'] ?>"><?= $tournament['tournament_name'] ?></option>
                 <?php endforeach; ?>
             </select> -->
-            <button type="submit">Add Player Only</button>
+            <button type="submit">Register New Player.</button>
         </form>
 
         <!-- Form to assign existing player to tournament -->
@@ -368,11 +382,12 @@ if ($result->num_rows > 0) {
 
         <!-- Form to create tournament -->
         <form method="POST" action="add_player.php">
-            <label for="tournament_name">Tournament Name:</label>
+            <label for="tournament_name">Register Tournament:</label>
             <input type="text" id="tournament_name" name="tournament_name" required>
             <label for="age_criteria">Age Criteria:</label>
             <select id="age_criteria" name="age_criteria" required>
                 <option value="Under 11">Under 11</option>
+                <option value="Under 13">Under 13</option>
                 <option value="Under 15">Under 15</option>
                 <option value="Under 17">Under 17</option>
                 <option value="Under 19">Under 19</option>
@@ -387,8 +402,8 @@ if ($result->num_rows > 0) {
             </select>
             <label for="sex_criteria">Sex Criteria:</label>
             <select id="sex_criteria" name="sex_criteria" required>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
+                <option value="M">Male</option>
+                <option value="F">Female</option>
                 <option value="Mixed">Mixed</option>
             </select>
             <button type="submit">Create Tournament</button>
