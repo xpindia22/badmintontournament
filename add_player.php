@@ -112,28 +112,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['player_id'], $_POST['t
             $max_age = (int) filter_var($age_criteria, FILTER_SANITIZE_NUMBER_INT);
             if ($player_age < $max_age) {
                 $allowed = true;
-            } else if ($player_age < 11 && $max_age >= 11) {
-                $allowed = true;
-            } else if ($player_age < 13 && $max_age >= 13) {
-                $allowed = true;
-            } else if ($player_age < 15 && $max_age >= 15) {
-                $allowed = true;
-            } else if ($player_age < 17 && $max_age >= 17) {
-                $allowed = true;
-            } else if ($player_age < 19 && $max_age >= 19) {
-                $allowed = true;
             }
         } else if (strpos($age_criteria, 'Senior') === 0) {
             $min_age = (int) filter_var($age_criteria, FILTER_SANITIZE_NUMBER_INT);
             if ($player_age >= $min_age) {
-                $allowed = true;
-            } else if ($player_age >= 40 && $min_age == 50) {
-                $allowed = true;
-            } else if ($player_age >= 50 && $min_age == 60) {
-                $allowed = true;
-            } else if ($player_age >= 60 && $min_age == 65) {
-                $allowed = true;
-            } else if ($player_age >= 65 && $min_age == 70) {
                 $allowed = true;
             }
         }
@@ -177,7 +159,7 @@ if (isset($_GET['delete'])) {
 if (isset($_GET['delete_assignment'])) {
     $player_id = $_GET['delete_assignment'];
     $sql = "DELETE FROM tournament_players WHERE player_id = ?";
-    $stmt->prepare($sql);
+    $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $player_id);
     $stmt->execute();
     header("Location: add_player.php");
@@ -189,6 +171,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['tournament_name'], $_P
     $tournament_name = $_POST['tournament_name'];
     $age_criteria = $_POST['age_criteria'];
     $sex_criteria = normalizeSex($_POST['sex_criteria']);
+    if ($sex_criteria === null && $_POST['sex_criteria'] !== 'Mixed') {
+        echo "<script>alert('Invalid sex criteria value!'); window.location.href = 'add_player.php';</script>";
+        exit();
+    }
+    if ($_POST['sex_criteria'] === 'Mixed') {
+        $sex_criteria = 'Mixed';
+    }
+
     $sql = "INSERT INTO tournaments (tournament_name, age_criteria, sex_criteria) VALUES (?, ?, ?)";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("sss", $tournament_name, $age_criteria, $sex_criteria);
