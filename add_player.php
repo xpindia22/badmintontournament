@@ -2,11 +2,11 @@
 require_once 'config.php';
 
 // Handle adding a new player and assigning to tournament
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['new_player_name'], $_POST['new_player_dob'], $_POST['new_player_sex'], $_POST['new_tournament_id'])) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['new_player_name'], $_POST['new_player_dob'], $_POST['new_player_sex'])) {
     $player_name = $_POST['new_player_name'];
     $dob = $_POST['new_player_dob'];
     $sex = $_POST['new_player_sex'];
-    $tournament_id = $_POST['new_tournament_id'];
+     
     $age = date_diff(date_create($dob), date_create('today'))->y;
 
     $conn->begin_transaction();
@@ -337,14 +337,14 @@ if ($result->num_rows > 0) {
                 <option value="Female">Female</option>
                 <option value="Other">Other</option>
             </select>
-            <label for="new_tournament_id">Select Tournament:</label>
+            <!-- <label for="new_tournament_id">Select Tournament:</label>
             <select id="new_tournament_id" name="new_tournament_id" required>
                 <option value="">Select Tournament</option>
                 <?php foreach ($tournaments as $tournament): ?>
                     <option value="<?= $tournament['tournament_id'] ?>"><?= $tournament['tournament_name'] ?></option>
                 <?php endforeach; ?>
-            </select>
-            <button type="submit">Add Player and Assign to Tournament</button>
+            </select> -->
+            <button type="submit">Add Player Only</button>
         </form>
 
         <!-- Form to assign existing player to tournament -->
