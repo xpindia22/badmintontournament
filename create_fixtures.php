@@ -1,6 +1,17 @@
 <?php
 require_once 'config.php';
 
+// Fetch players from the database
+$query = "SELECT player_id, player_name FROM players";
+$result = mysqli_query($conn, $query);
+
+$players = [];
+if ($result->num_rows > 0) {
+    while ($row = mysqli_fetch_assoc($result)) {
+        $players[] = $row;
+    }
+}
+
 // Fetch championships from the database
 $query = "SELECT championship_id, championship_name FROM championships";
 $result = mysqli_query($conn, $query);
@@ -12,58 +23,69 @@ if ($result->num_rows > 0) {
     }
 }
 
-// Function to create fixtures for a given championship and gender
-function createFixtures($championship_id, $gender, $conn) {
-    $result = mysqli_query($conn, "SELECT p.player_id, p.player_name, p.pool 
+// Badminton categories
+$categories = [
+    'Under 17 Boys Singles',
+    'Under 17 Girls Singles',
+    'Men Singles',
+    'Women Singles',
+    'Under 17 Boys Doubles',
+    'Under 17 Girls Doubles',
+    'Men Doubles',
+    'Women Doubles',
+    'Mixed Doubles',
+];
+
+// Function to create fixtures for a given category, championship, and gender
+function createFixtures($championship_id, $category, $gender, $conn) {
+    $result = mysqli_query($conn, "SELECT p.player_id, p.player_name 
                                    FROM players p
                                    JOIN player_championship pc ON p.player_id = pc.player_id
                                    WHERE pc.championship_id = $championship_id AND p.sex = '$gender'");
     $players = [];
     while ($row = mysqli_fetch_assoc($result)) {
-        $players[$row['pool']][] = $row;
+        $players[] = $row;
     }
 
+    shuffle($players);  // Shuffle players to randomize the fixtures
+
+    $round = 1;
+    $fixtures = [];
     $displayFixtures = [];
 
-    foreach ($players as $pool => $poolPlayers) {
-        shuffle($poolPlayers);  // Shuffle players to randomize the fixtures
+    while (count($players) > 1) {
+        $player1 = array_shift($players);
+        $player2 = array_shift($players);
+        $fixtures[] = [$player1, $player2];
+    }
 
-        $round = 1;
-        $fixtures = [];
+    // If there is an odd number of players, the last player gets a bye
+    if (count($players) == 1) {
+        $fixtures[] = [$players[0], null];
+    }
 
-        while (count($poolPlayers) > 1) {
-            $player1 = array_shift($poolPlayers);
-            $player2 = array_shift($poolPlayers);
-            $fixtures[] = [$player1, $player2];
-        }
+    // Insert fixtures into the database and prepare display data
+    foreach ($fixtures as $fixture) {
+        $player1_id = $fixture[0]['player_id'];
+        $player2_id = $fixture[1]['player_id'] ?? 'NULL'; // If no player2, set to NULL
+        $player1_name = $fixture[0]['player_name'];
+        $player2_name = $fixture[1]['player_name'] ?? 'BYE';
 
-        // If there is an odd number of players, the last player gets a bye
-        if (count($poolPlayers) == 1) {
-            $fixtures[] = [$poolPlayers[0], null];
-        }
+        $sql = "INSERT INTO fixtures (championship_id, category, round, player1_id, player2_id) VALUES ($championship_id, '$category', $round, $player1_id, " . ($player2_id ? $player2_id : 'NULL') . ")";
+        mysqli_query($conn, $sql);
 
-        // Insert fixtures into the database and prepare display data
-        foreach ($fixtures as $fixture) {
-            $player1_id = $fixture[0]['player_id'];
-            $player2_id = $fixture[1]['player_id'] ?? 'NULL'; // If no player2, set to NULL
-            $player1_name = $fixture[0]['player_name'];
-            $player2_name = $fixture[1]['player_name'] ?? 'BYE';
-
-            $sql = "INSERT INTO fixtures (championship_id, pool, round, player1_id, player2_id) VALUES ($championship_id, '$pool', $round, $player1_id, " . ($player2_id ? $player2_id : 'NULL') . ")";
-            mysqli_query($conn, $sql);
-
-            $displayFixtures[$pool][] = [$player1_name, $player2_name];
-        }
+        $displayFixtures[] = [$player1_name, $player2_name];
     }
 
     return $displayFixtures;
 }
 
 $displayFixtures = [];
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['championship_id']) && isset($_POST['gender'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['player_id']) && isset($_POST['championship_id']) && isset($_POST['category']) && isset($_POST['gender'])) {
     $championship_id = $_POST['championship_id'];
+    $category = $_POST['category'];
     $gender = $_POST['gender'];
-    $displayFixtures = createFixtures($championship_id, $gender, $conn);
+    $displayFixtures = createFixtures($championship_id, $category, $gender, $conn);
     $message = "Fixtures have been generated.";
 }
 
@@ -136,6 +158,10 @@ mysqli_close($conn);
         }
     </style>
     <script>
+        function showCategorySelection() {
+            document.getElementById('category-selection').style.display = 'block';
+        }
+
         function showGenderSelection() {
             document.getElementById('gender-selection').style.display = 'block';
         }
@@ -150,13 +176,31 @@ mysqli_close($conn);
             </div>
         <?php endif; ?>
         <form method="POST" action="">
-            <label for="championship_id">Select Championship:</label>
-            <select id="championship_id" name="championship_id" required onchange="showGenderSelection()">
-                <option value="">Select Championship</option>
-                <?php foreach ($championships as $championship): ?>
-                    <option value="<?php echo $championship['championship_id']; ?>"><?php echo $championship['championship_name']; ?></option>
+            <label for="player_id">Select Player:</label>
+            <select id="player_id" name="player_id" required onchange="showCategorySelection()">
+                <option value="">Select Player</option>
+                <?php foreach ($players as $player): ?>
+                    <option value="<?php echo $player['player_id']; ?>"><?php echo $player['player_name']; ?></option>
                 <?php endforeach; ?>
             </select>
+            <br>
+            <div id="category-selection" style="display: none;">
+                <label for="championship_id">Select Championship:</label>
+                <select id="championship_id" name="championship_id" required onchange="showGenderSelection()">
+                    <option value="">Select Championship</option>
+                    <?php foreach ($championships as $championship): ?>
+                        <option value="<?php echo $championship['championship_id']; ?>"><?php echo $championship['championship_name']; ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <br>
+                <label for="category">Select Category:</label>
+                <select id="category" name="category" required>
+                    <option value="">Select Category</option>
+                    <?php foreach ($categories as $category): ?>
+                        <option value="<?php echo $category; ?>"><?php echo $category; ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <br>
             <div id="gender-selection" style="display: none;">
                 <label for="gender">Select Gender:</label>
@@ -171,29 +215,27 @@ mysqli_close($conn);
         </form>
 
         <?php if (!empty($displayFixtures)): ?>
-            <?php foreach ($displayFixtures as $pool => $fixtures): ?>
-                <h2>Fixtures for Pool <?php echo htmlspecialchars($pool); ?></h2>
-                <?php if (!empty($fixtures)): ?>
-                    <table>
-                        <thead>
+            <h2>Fixtures for <?php echo htmlspecialchars($category); ?></h2>
+            <?php if (!empty($displayFixtures)): ?>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Player 1</th>
+                            <th>Player 2</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($displayFixtures as $fixture): ?>
                             <tr>
-                                <th>Player 1</th>
-                                <th>Player 2</th>
+                                <td><?php echo htmlspecialchars($fixture[0]); ?></td>
+                                <td><?php echo htmlspecialchars($fixture[1]); ?></td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($fixtures as $fixture): ?>
-                                <tr>
-                                    <td><?php echo htmlspecialchars($fixture[0]); ?></td>
-                                    <td><?php echo htmlspecialchars($fixture[1]); ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                <?php else: ?>
-                    <p>No fixtures found for Pool <?php echo htmlspecialchars($pool); ?>.</p>
-                <?php endif; ?>
-            <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php else: ?>
+                <p>No fixtures found for this category.</p>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 </body>

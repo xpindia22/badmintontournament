@@ -114,6 +114,48 @@ mysqli_close($conn);
             color: green;
         }
     </style>
+    <script>
+        function fetchEligibleCategories() {
+            const playerSelect = document.getElementById('player_id');
+            const categorySelect = document.getElementById('category');
+            const playerDob = playerSelect.options[playerSelect.selectedIndex].getAttribute('data-dob');
+            const playerSex = playerSelect.options[playerSelect.selectedIndex].getAttribute('data-sex');
+
+            const playerAge = calculateAge(playerDob);
+
+            const categories = JSON.parse('<?php echo json_encode($categories); ?>');
+
+            categorySelect.innerHTML = ''; // Clear existing options
+
+            categories.forEach(function(category) {
+                if ((playerAge >= category.min_age && playerAge <= category.max_age) && 
+                    (category.sex === playerSex || category.sex === 'Mixed')) {
+                    const option = document.createElement('option');
+                    option.value = category.name;
+                    option.text = category.name;
+                    categorySelect.appendChild(option);
+                }
+            });
+
+            if (categorySelect.options.length === 0) {
+                const option = document.createElement('option');
+                option.text = "No eligible categories available";
+                option.disabled = true;
+                categorySelect.appendChild(option);
+            }
+        }
+
+        function calculateAge(dob) {
+            const dobDate = new Date(dob);
+            const today = new Date();
+            let age = today.getFullYear() - dobDate.getFullYear();
+            const monthDiff = today.getMonth() - dobDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dobDate.getDate())) {
+                age--;
+            }
+            return age;
+        }
+    </script>
 </head>
 <body>
     <div class="container">
@@ -125,10 +167,10 @@ mysqli_close($conn);
         <?php endif; ?>
         <form method="POST" action="">
             <label for="player_id">Select Player:</label>
-            <select id="player_id" name="player_id" required>
+            <select id="player_id" name="player_id" required onchange="fetchEligibleCategories()">
                 <option value="">Select Player</option>
                 <?php foreach ($players as $player): ?>
-                    <option value="<?php echo $player['player_id']; ?>">
+                    <option value="<?php echo $player['player_id']; ?>" data-dob="<?php echo $player['dob']; ?>" data-sex="<?php echo $player['sex']; ?>">
                         <?php echo $player['player_name']; ?>
                     </option>
                 <?php endforeach; ?>
@@ -145,11 +187,7 @@ mysqli_close($conn);
             <label for="category">Select Category:</label>
             <select id="category" name="category" required>
                 <option value="">Select Category</option>
-                <?php foreach ($categories as $category): ?>
-                    <option value="<?php echo $category['name']; ?>">
-                        <?php echo $category['name']; ?>
-                    </option>
-                <?php endforeach; ?>
+                <!-- Categories will be dynamically populated based on player selection -->
             </select>
             <br>
             <button type="submit">Assign Category</button>
