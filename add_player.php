@@ -3,43 +3,37 @@ require_once 'config.php';
 
 $message = "";
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if ($_POST['form_action'] === 'add_player') {
-        $player_name = $_POST['player_name'];
-        $dob = $_POST['dob'];
-        $age = $_POST['age'];
-        $sex = $_POST['sex'];
+// Function to calculate age
+function calculateAge($dob) {
+    $birthDate = new DateTime($dob);
+    $today = new DateTime('today');
+    return $birthDate->diff($today)->y;
+}
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $player_id = $_POST['player_id'];
+    $player_name = $_POST['player_name'];
+    $dob = $_POST['dob'];
+    $age = calculateAge($dob);
+    $sex = $_POST['sex'];
+
+    if ($_POST['form_action'] === 'add_player') {
         // Insert player data into the database
         $stmt = $conn->prepare("INSERT INTO players (player_name, dob, age, sex) VALUES (?, ?, ?, ?)");
         $stmt->bind_param("ssis", $player_name, $dob, $age, $sex);
-
-        if ($stmt->execute()) {
-            $message = "Player added successfully.";
-        } else {
-            $message = "Error: " . $stmt->error;
-        }
-
-        $stmt->close();
-    } elseif ($_POST['form_action'] === 'edit_player') {
-        $player_id = $_POST['player_id'];
-        $player_name = $_POST['player_name'];
-        $dob = $_POST['dob'];
-        $age = $_POST['age'];
-        $sex = $_POST['sex'];
-
+    } else {
         // Update player data in the database
         $stmt = $conn->prepare("UPDATE players SET player_name = ?, dob = ?, age = ?, sex = ? WHERE player_id = ?");
         $stmt->bind_param("ssisi", $player_name, $dob, $age, $sex, $player_id);
-
-        if ($stmt->execute()) {
-            $message = "Player updated successfully.";
-        } else {
-            $message = "Error: " . $stmt->error;
-        }
-
-        $stmt->close();
     }
+
+    if ($stmt->execute()) {
+        $message = "Player saved successfully.";
+    } else {
+        $message = "Error: " . $stmt->error;
+    }
+
+    $stmt->close();
 } elseif ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['delete_player'])) {
     $player_id = $_GET['delete_player'];
 
@@ -79,7 +73,7 @@ $conn->close();
             padding: 0;
         }
         .container {
-            width: 50%;
+            width: 70%;
             margin: auto;
             overflow: hidden;
             background: white;
@@ -117,6 +111,7 @@ $conn->close();
             text-align: center;
             margin-top: 20px;
             font-size: 1.2em;
+            color: green;
         }
         table {
             width: 100%;
@@ -211,7 +206,7 @@ $conn->close();
                 <option value="U">Unspecified</option>
             </select>
             <br>
-            <button type="submit" id="submit_button" name="add_player">Add Player</button>
+            <button type="submit" id="submit_button">Add Player</button>
         </form>
 
         <h2>List of Players</h2>
